@@ -100,7 +100,7 @@ AnnotationToolbar::AnnotationToolbar(bool capture, QWidget *parent, Qt::WindowFl
     separator();
     action("copy", "Copy image", EditorAction::Copy); action("save", "Save PNG", EditorAction::Save);
     if (capture) action("pin", "Pin to desktop (Enter)", EditorAction::Pin);
-    action("ocr", "OCR · copy text (O)", EditorAction::Ocr); action("close", capture ? "Cancel (Esc)" : "Hide tools (E)", EditorAction::Close);
+    action("ocr", "OCR · copy text (O)", EditorAction::Ocr); action("close", capture ? "Cancel (Esc)" : "Hide tools (Space)", EditorAction::Close);
     setHistory(false, false);
 }
 

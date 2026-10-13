@@ -1,9 +1,33 @@
 #include "platform.h"
 
 #include <QScreen>
+#include <QWidget>
 #include <unistd.h>
+#import <AppKit/AppKit.h>
 #import <ApplicationServices/ApplicationServices.h>
 #import <Vision/Vision.h>
+
+@interface ScreenPinHover : NSObject {
+@public
+    std::function<void(bool)> changed;
+}
+@end
+@implementation ScreenPinHover
+- (void)mouseEntered:(NSEvent *)event { Q_UNUSED(event); if (changed) changed(true); }
+- (void)mouseExited:(NSEvent *)event { Q_UNUSED(event); if (changed) changed(false); }
+@end
+
+std::function<void()> watchPinHover(QWidget *window, std::function<void(bool)> changed)
+{
+    if (QGuiApplication::platformName() != "cocoa") return {};
+    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(window->winId());
+    ScreenPinHover *observer = [[ScreenPinHover alloc] init]; observer->changed = std::move(changed);
+    NSTrackingArea *area = [[NSTrackingArea alloc] initWithRect:NSZeroRect
+        options:NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways | NSTrackingInVisibleRect
+        owner:observer userInfo:nil];
+    [view addTrackingArea:area];
+    return [view, area, observer] { observer->changed = {}; [view removeTrackingArea:area]; };
+}
 
 QList<DesktopWindow> desktopWindows()
 {

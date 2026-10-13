@@ -1,14 +1,17 @@
 #pragma once
 
 #include "toolbar.h"
+#include "hotkey.h"
 #include <QImage>
 #include <QWidget>
+#include <functional>
 class InlineTextEditor;
 
 class PinWindow : public QWidget {
     Q_OBJECT
 public:
     explicit PinWindow(QImage image);
+    ~PinWindow() override;
     QImage exportedImage() const;
     void setClickThrough(bool enabled);
     bool isClickThrough() const { return clickThrough; }
@@ -33,12 +36,18 @@ protected:
     void moveEvent(QMoveEvent *) override;
     void hideEvent(QHideEvent *) override;
     void showEvent(QShowEvent *) override;
+    void enterEvent(QEnterEvent *) override;
+    void leaveEvent(QEvent *) override;
+    bool eventFilter(QObject *, QEvent *) override;
 private:
     QPointF imagePoint(QPointF point) const;
     void copy();
     void save();
     void setTool(Tool value);
     void showTools();
+    void toggleTools();
+    void updateToolsShortcut();
+    bool canToggleTools() const;
     void positionTools();
     QImage image;
     qreal ratio = 1, zoom = 1;
@@ -48,6 +57,11 @@ private:
     AnnotationLayer annotations;
     AnnotationToolbar *toolbar;
     InlineTextEditor *textEditor;
+    Hotkeys toolShortcut;
+    bool hovered = false;
+#ifdef Q_OS_MACOS
+    std::function<void()> stopHover;
+#endif
     bool moving = false, clickThrough = false;
     QPointF dragStart;
     QPoint windowStart;

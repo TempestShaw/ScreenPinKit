@@ -1,5 +1,6 @@
 #include "pin.h"
 #include "texteditor.h"
+#include "platform.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -19,13 +20,16 @@ PinWindow::PinWindow(QImage value)
     ratio = image.devicePixelRatio();
     image.setDevicePixelRatio(1);
     setWindowTitle("ScreenPinKit — Pinned image");
-    setAccessibleName("Pinned image. Right-click for annotation tools. Wheel to zoom. Double-click to close.");
+    setAccessibleName("Pinned image. Hover and press Space for annotation tools. Wheel to zoom. Double-click to close.");
     setAttribute(Qt::WA_DeleteOnClose);
     setAttribute(Qt::WA_OpaquePaintEvent);
     setAttribute(Qt::WA_MacAlwaysShowToolWindow);
     setFocusPolicy(Qt::StrongFocus);
     toolbar = new AnnotationToolbar(false, this, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+    toolbar->setAttribute(Qt::WA_ShowWithoutActivating);
     textEditor = new InlineTextEditor(this);
+    textEditor->installEventFilter(this);
+    connect(&toolShortcut, &Hotkeys::pinTools, this, [this] { if (canToggleTools()) toggleTools(); });
     connect(textEditor, &InlineTextEditor::submitted, this, [this](QString text, QPointF baseline) {
         Annotation a; a.tool = Tool::Text; a.start = imagePoint(baseline);
         a.text = text; a.color = color; a.fontSize = 20 * ratio; addAnnotation(std::move(a));
@@ -44,6 +48,13 @@ PinWindow::PinWindow(QImage value)
     });
     setZoom(1);
     setCursor(Qt::SizeAllCursor);
+}
+
+PinWindow::~PinWindow()
+{
+#ifdef Q_OS_MACOS
+    if (stopHover) stopHover();
+#endif
 }
 
 QPointF PinWindow::imagePoint(QPointF point) const
@@ -92,6 +103,7 @@ void PinWindow::setClickThrough(bool enabled)
     setWindowFlag(Qt::WindowDoesNotAcceptFocus, enabled);
     move(position);
     show();
+    updateToolsShortcut();
 }
 
 void PinWindow::addAnnotation(Annotation annotation)
@@ -173,10 +185,9 @@ void PinWindow::keyPressEvent(QKeyEvent *e)
     else if (e->key() == Qt::Key_R) setTool(Tool::Rectangle);
     else if (e->key() == Qt::Key_T) setTool(Tool::Text);
     else if (e->key() == Qt::Key_O) emit ocrRequested(exportedImage());
-    else if (e->key() == Qt::Key_E) {
-        if (toolbar->isVisible()) { toolbar->hide(); setTool(Tool::Move); }
-        else showTools();
-    } else if (e->key() == Qt::Key_0) setZoom(1);
+    else if (e->key() == Qt::Key_E) toggleTools();
+    else if (e->key() == Qt::Key_Space && e->modifiers() == Qt::NoModifier && !e->isAutoRepeat() && canToggleTools()) toggleTools();
+    else if (e->key() == Qt::Key_0) setZoom(1);
     else if (e->key() == Qt::Key_Left) move(pos() + QPoint(-1, 0));
     else if (e->key() == Qt::Key_Right) move(pos() + QPoint(1, 0));
     else if (e->key() == Qt::Key_Up) move(pos() + QPoint(0, -1));
@@ -187,7 +198,7 @@ void PinWindow::keyPressEvent(QKeyEvent *e)
 void PinWindow::contextMenuEvent(QContextMenuEvent *e)
 {
     QMenu menu(this);
-    menu.addAction("Annotate\tE", this, &PinWindow::showTools);
+    menu.addAction("Annotate\tSpace", this, &PinWindow::showTools);
     menu.addSeparator();
     menu.addAction("Undo", this, &PinWindow::undo)->setEnabled(annotations.canUndo());
     menu.addAction("Redo", this, &PinWindow::redo)->setEnabled(annotations.canRedo());
@@ -223,6 +234,54 @@ void PinWindow::positionTools()
 }
 
 void PinWindow::showTools() { if (!clickThrough) { toolbar->show(); positionTools(); } }
+void PinWindow::toggleTools()
+{
+    if (toolbar->isVisible()) {
+        textEditor->finish(); toolbar->hide();
+        tool = Tool::Move; toolbar->setTool(tool); setCursor(Qt::SizeAllCursor);
+    }
+    else showTools();
+}
+
+bool PinWindow::canToggleTools() const
+{
+    return hovered && isVisible() && !clickThrough && !textEditor->isVisible() && rect().contains(mapFromGlobal(QCursor::pos()));
+}
+
+void PinWindow::updateToolsShortcut() { toolShortcut.enablePinTools(QGuiApplication::platformName() != "offscreen" && canToggleTools()); }
+
+bool PinWindow::eventFilter(QObject *object, QEvent *event)
+{
+    if (object == textEditor && (event->type() == QEvent::Show || event->type() == QEvent::Hide)) updateToolsShortcut();
+    return QWidget::eventFilter(object, event);
+}
+
+void PinWindow::enterEvent(QEnterEvent *e)
+{
+    QWidget::enterEvent(e);
+#ifdef Q_OS_MACOS
+    if (QGuiApplication::platformName() == "cocoa") return; // Qt ignores inactive-app hover; the native tracking area handles it.
+#endif
+    hovered = true; updateToolsShortcut();
+}
+
+void PinWindow::leaveEvent(QEvent *e)
+{
+    QWidget::leaveEvent(e);
+#ifdef Q_OS_MACOS
+    if (QGuiApplication::platformName() == "cocoa") return;
+#endif
+    hovered = false; updateToolsShortcut();
+}
+
 void PinWindow::moveEvent(QMoveEvent *e) { QWidget::moveEvent(e); if (toolbar->isVisible()) positionTools(); }
-void PinWindow::hideEvent(QHideEvent *e) { toolbar->hide(); QWidget::hideEvent(e); }
-void PinWindow::showEvent(QShowEvent *e) { QWidget::showEvent(e); showTools(); }
+void PinWindow::hideEvent(QHideEvent *e) { toolbar->hide(); hovered = false; updateToolsShortcut(); QWidget::hideEvent(e); }
+void PinWindow::showEvent(QShowEvent *e)
+{
+    QWidget::showEvent(e);
+#ifdef Q_OS_MACOS
+    if (stopHover) stopHover();
+    stopHover = watchPinHover(this, [this](bool inside) { hovered = inside; updateToolsShortcut(); });
+#endif
+    hovered = rect().contains(mapFromGlobal(QCursor::pos())); updateToolsShortcut();
+}

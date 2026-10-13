@@ -92,14 +92,17 @@ public:
         connect(replayButton, &QPushButton::clicked, this, [this] { replay(); }); recoveryLayout->addWidget(replayButton);
         homeLayout->addWidget(recovery);
         auto *help = new QLabel("<b>Tab</b> Window / Element · <b>P</b> Pen · <b>A</b> Arrow · <b>R</b> Rectangle · <b>T</b> Text<br>"
-                               "<b>O</b> Local OCR · <b>C</b> Pick color · <b>E</b> Pin tools · <b>Scroll</b> Zoom", this);
+                               "<b>O</b> Local OCR · <b>C</b> Pick color · <b>Space</b> Pin tools on hover · <b>Scroll</b> Zoom", this);
         help->setObjectName("muted"); help->setStyleSheet("color:#6d7b92; font-size:12px; padding-top:6px;"); homeLayout->addWidget(help);
         homeLayout->addStretch();
 
         auto *preferences = new QWidget(this); auto *preferencesLayout = new QVBoxLayout(preferences);
         preferencesLayout->setContentsMargins(0, 18, 0, 0); preferencesLayout->setSpacing(12); pages->addTab(preferences, "Preferences");
         preferencesLayout->addWidget(new QLabel("<span style='font-size:17px; font-weight:600'>Make it yours</span>", this));
-        auto *hint = new QLabel("Click a field, then press keys or mouse side buttons (Mouse4 / Mouse5).\nHold both side buttons for a combo; release to finish. Modifiers are optional. Clear to disable.", this);
+        auto *hint = new QLabel("Click a field, then press a shortcut (Ctrl+A, Shift+A, F1–F20) or Mouse4 / Mouse5.\nHold both side buttons for a combo; release to finish. Clear a field to disable its shortcut.", this);
+#ifdef Q_OS_MACOS
+        hint->setToolTip("If the top row controls brightness or volume, hold Fn while pressing F1–F20.");
+#endif
         hint->setObjectName("muted"); hint->setWordWrap(true); preferencesLayout->addWidget(hint);
         auto *shortcutCard = new QFrame(this); shortcutCard->setObjectName("card");
         auto *shortcutLayout = new QVBoxLayout(shortcutCard); shortcutLayout->setContentsMargins(18, 12, 18, 12);
@@ -287,7 +290,7 @@ private:
         });
         connect(window, &PinWindow::ocrRequested, this, [this](QImage image) { ocr(std::move(image)); });
         window->show();
-        status->setText(QString("%1 pinned image(s) · E shows annotation tools.").arg(pins.size()));
+        status->setText(QString("%1 pinned image(s) · Hover and press Space for annotation tools.").arg(pins.size()));
     }
 
     void paste()

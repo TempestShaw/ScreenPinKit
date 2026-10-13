@@ -69,7 +69,7 @@ The script produces a validated but unsigned x64 MSIX and adds the manifest's lo
 
 Preferences records a global keyboard chord or mouse side-button gesture for capture, paste and restoring the last image. Click a field, then press Mouse4, Mouse5, or hold both together; release all side buttons to finish. Control/Command/Alt/Option/Shift can be held with side buttons. Global mouse actions also complete on release, so a two-button chord takes priority over a single-button prefix. An unfinished prefix is replayed as an ordinary side click. Left/right/middle clicks are not bindings. Mouse monitoring is installed only when a mouse binding is active and is suspended while recording. On macOS, applying mouse bindings requires the app's Accessibility permission. If mouse software remaps side buttons into keyboard shortcuts, record the emitted keyboard chord instead.
 
-Clear a field to disable that action. Letters, digits, Space and F1–F20 are supported; letters/digits/Space require Control/Command/Alt/Option. Duplicate or occupied shortcuts are rejected and the previous registration is restored. Successful changes are persisted and update the panel and tray menu. Existing keyboard settings remain compatible.
+Clear a field to disable that action. Letters, digits, Space and F1–F20 are supported; letters/digits/Space require Shift/Control/Command/Alt/Option. On Mac keyboards whose top row controls brightness or volume, hold Fn to send a function key. Duplicate or occupied shortcuts are rejected and the previous registration is restored. Successful changes are persisted and update the panel and tray menu. Existing keyboard settings remain compatible.
 
 Recovery saves **one cropped image** in `QStandardPaths::AppLocalDataLocation/last-image.png`, after capture/paste and when a pin closes. It includes rendered annotations, original pixel resolution/DPR, position and zoom. A small preview is encoded in PNG metadata so opening the panel only decodes the thumbnail. Restore works without the clipboard and across restarts; annotations are flattened and cannot be independently edited after restoration. The saved position is clamped to a connected display. Preferences can clear the file or turn recovery off (also clears it). Encoding runs in one temporary worker, with only the newest pending image retained; there is no idle timer, persistent full-screen snapshot, network upload or unbounded history.
 
@@ -91,7 +91,7 @@ macOS Element mode additionally needs Accessibility permission for this app; its
 | Move / zoom a pin | Drag / wheel |
 | Annotate selection / pin | Floating toolbar; M/P/A/R/T select move/pen/arrow/rectangle/text |
 | Enter text on the image | T, then click; Enter finishes, Shift+Enter adds a line, Esc cancels the text |
-| Hide / show pin tools | E; pin right-click → Annotate |
+| Hide / show pin tools | Hover over the pin and press Space; tools start hidden; pin right-click → Annotate |
 | Undo / redo / copy / save | Platform-standard Ctrl or Cmd shortcuts |
 | Original zoom / close pin | 0 / Escape or double-click in Move mode |
 | Restore click-through pins | Tray menu or control panel |

@@ -8,6 +8,7 @@
 #include <QTemporaryDir>
 #include <QFileInfo>
 #include <QApplication>
+#include <QAction>
 #include <QClipboard>
 #include <QPainter>
 #include <QDialog>
@@ -128,6 +129,37 @@ private slots:
         QCOMPARE(edit.binding(), Shortcut(Qt::ForwardButton, Qt::ShiftModifier));
     }
 
+    void recorderAcceptsKeyboardCombinationsAndFunctionKeys_data()
+    {
+        QTest::addColumn<int>("key"); QTest::addColumn<int>("modifiers");
+        QTest::newRow("Ctrl+A") << int(Qt::Key_A) << int(Qt::ControlModifier);
+        QTest::newRow("Meta+A") << int(Qt::Key_A) << int(Qt::MetaModifier);
+        QTest::newRow("Shift+A") << int(Qt::Key_A) << int(Qt::ShiftModifier);
+        QTest::newRow("Ctrl+Shift+A") << int(Qt::Key_A) << int(Qt::ControlModifier | Qt::ShiftModifier);
+        for (int key = Qt::Key_F1; key <= Qt::Key_F10; ++key)
+            QTest::newRow(qPrintable(QKeySequence(key).toString())) << key << 0;
+    }
+
+    void recorderAcceptsKeyboardCombinationsAndFunctionKeys()
+    {
+        QFETCH(int, key); QFETCH(int, modifiers);
+        QWidget window; ShortcutEdit edit(&window);
+        const Shortcut expected{QKeySequence(QKeyCombination(Qt::KeyboardModifiers(modifiers), Qt::Key(key)))};
+        QAction action(&window); action.setShortcut(expected.key); window.addAction(&action);
+        QSignalSpy triggered(&action, &QAction::triggered);
+        window.show(); window.activateWindow(); edit.setFocus(); QTRY_VERIFY(edit.hasFocus());
+        QTest::keyClick(window.windowHandle(), Qt::Key(key), Qt::KeyboardModifiers(modifiers));
+        QCOMPARE(edit.binding(), expected);
+        QCOMPARE(edit.text(), expected.toString());
+        QCOMPARE(triggered.count(), 0); // Recording must override existing application shortcuts.
+        QTemporaryDir dir; QSettings settings(dir.filePath("settings.ini"), QSettings::IniFormat);
+        const Hotkeys::Bindings bindings{edit.binding(), {}, {}};
+        QVERIFY2(Hotkeys::validate(bindings).isEmpty(), qPrintable(Hotkeys::validate(bindings)));
+        Hotkeys::save(settings, bindings);
+        QSettings reloaded(dir.filePath("settings.ini"), QSettings::IniFormat);
+        QCOMPARE(Hotkeys::load(reloaded), bindings);
+    }
+
     void shortcutsValidateAndPersist()
     {
         QTemporaryDir dir; QSettings settings(dir.filePath("settings.ini"), QSettings::IniFormat);
@@ -243,6 +275,36 @@ private slots:
         }
         QTest::mouseMove(&overlay, {300, 100});
         QCOMPARE(overlay.selection.rect, window.rect);
+    }
+
+    void pinToolsStartHiddenAndSpaceOnlyTogglesHoveredPin()
+    {
+        QImage source(400, 240, QImage::Format_RGB32); source.fill(Qt::white);
+        PinWindow pin(source); pin.move(40, 40); pin.show();
+        auto *tools = pin.findChild<AnnotationToolbar *>();
+        QVERIFY(!tools->isVisible());
+        QCursor::setPos(pin.mapToGlobal(QPoint(-20, -20)));
+        QTest::keyClick(&pin, Qt::Key_Space); QVERIFY(!tools->isVisible());
+        QCursor::setPos(pin.mapToGlobal(QPoint(100, 100)));
+        QEnterEvent entered({100, 100}, {100, 100}, QCursor::pos());
+        QApplication::sendEvent(&pin, &entered);
+        QTest::keyClick(&pin, Qt::Key_Space); QVERIFY(tools->isVisible());
+        QKeyEvent repeat(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier, " ", true);
+        QApplication::sendEvent(&pin, &repeat); QVERIFY(tools->isVisible());
+        QTest::keyClick(&pin, Qt::Key_Space, Qt::ShiftModifier); QVERIFY(tools->isVisible());
+        QTest::keyClick(&pin, Qt::Key_Space); QVERIFY(!tools->isVisible());
+        QTest::keyClick(&pin, Qt::Key_Space); QVERIFY(tools->isVisible());
+        QTest::keyClick(&pin, Qt::Key_T);
+        QTest::mouseClick(&pin, Qt::LeftButton, Qt::NoModifier, {40, 40});
+        auto *editor = pin.findChild<QPlainTextEdit *>();
+        QTest::keyClicks(editor, "one two");
+        QCOMPARE(editor->toPlainText(), QString("one two")); QVERIFY(tools->isVisible());
+        QTest::keyClick(editor, Qt::Key_Return);
+        QTest::keyClick(&pin, Qt::Key_Space); QVERIFY(!tools->isVisible());
+        QTest::keyClick(&pin, Qt::Key_Space); QVERIFY(tools->isVisible());
+        pin.hide(); pin.show(); QVERIFY(!tools->isVisible());
+        pin.setClickThrough(true);
+        QTest::keyClick(&pin, Qt::Key_Space); QVERIFY(!tools->isVisible());
     }
 
     void textInputIsInlineOnPin()
@@ -469,6 +531,7 @@ private slots:
 
         PinWindow pin(crop); pin.show(); pin.setZoom(0.5);
         auto *pinTools = pin.findChild<AnnotationToolbar *>();
+        QTest::keyClick(&pin, Qt::Key_E);
         QTest::mouseClick(pinTools->findChild<QToolButton *>("arrow"), Qt::LeftButton);
         QTest::mousePress(&pin, Qt::LeftButton, Qt::NoModifier, {20, 50});
         QTest::mouseMove(&pin, {100, 50});

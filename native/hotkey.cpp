@@ -2,13 +2,16 @@
 #include <QApplication>
 #include <QKeyEvent>
 
+static int nextHotkeyBase = 0x5a00;
+static QList<int> availableHotkeyBases;
+
 #ifdef Q_OS_MACOS
 #include <Carbon/Carbon.h>
 #include <CoreGraphics/CoreGraphics.h>
 #include <ApplicationServices/ApplicationServices.h>
 struct Hotkeys::Platform {
     EventHandlerRef handler = nullptr;
-    std::array<EventHotKeyRef, 3> keys{};
+    std::array<EventHotKeyRef, 4> keys{};
     int base;
     CFMachPortRef mouseTap = nullptr;
     CFRunLoopSourceRef mouseSource = nullptr;
@@ -97,8 +100,8 @@ QString Hotkeys::validate(const Bindings &bindings)
             if (key.count() != 1 || nativeKey(key[0].key()) < 0 ||
                 (key[0].keyboardModifiers() & (Qt::KeypadModifier | Qt::GroupSwitchModifier)))
                 return "Use one shortcut with a letter, number, Space, or F1–F20.";
-            if (key[0].key() < Qt::Key_F1 && !(key[0].keyboardModifiers() & (Qt::ControlModifier | Qt::MetaModifier | Qt::AltModifier)))
-                return "Add Control, Command, Alt or Option to a letter, number or Space.";
+            if (key[0].key() < Qt::Key_F1 && !(key[0].keyboardModifiers() & (Qt::ControlModifier | Qt::MetaModifier | Qt::AltModifier | Qt::ShiftModifier)))
+                return "Add Shift, Control, Command, Alt or Option to a letter, number or Space.";
         }
         for (int j = 0; j < i; ++j) if (binding == bindings[j]) return "Each action needs a different shortcut.";
     }
@@ -107,20 +110,29 @@ QString Hotkeys::validate(const Bindings &bindings)
 
 Hotkeys::Hotkeys(QObject *parent) : QObject(parent), platform(std::make_unique<Platform>())
 {
-    static int nextBase = 0x5a00;
-    platform->base = nextBase; nextBase += 3;
+    // Pins create temporary shortcut owners; recycle IDs when they close.
+    if (availableHotkeyBases.isEmpty()) { platform->base = nextHotkeyBase; nextHotkeyBase += 4; }
+    else platform->base = availableHotkeyBases.takeLast();
 #ifdef Q_OS_MACOS
-    const EventTypeSpec type{kEventClassKeyboard, kEventHotKeyPressed};
+    const EventTypeSpec types[]{{kEventClassKeyboard, kEventHotKeyPressed}, {kEventClassKeyboard, kEventHotKeyReleased}};
     InstallEventHandler(GetApplicationEventTarget(), [](EventHandlerCallRef, EventRef event, void *context) -> OSStatus {
         EventHotKeyID id{};
         if (GetEventParameter(event, kEventParamDirectObject, typeEventHotKeyID, nullptr, sizeof(id), nullptr, &id) != noErr)
             return eventNotHandledErr;
         auto *hotkeys = static_cast<Hotkeys *>(context);
         const int index = int(id.id) - hotkeys->platform->base;
-        if (id.signature != 0x53504b4e || index < 0 || index >= 3) return eventNotHandledErr;
+        if (id.signature != 0x53504b4e || index < 0 || index >= 4) return eventNotHandledErr;
+        if (GetEventKind(event) == kEventHotKeyReleased) {
+            if (index != 3) return eventNotHandledErr;
+            hotkeys->pinToolsPressed = false; return noErr;
+        }
+        if (index == 3) {
+            if (hotkeys->pinToolsPressed) return noErr;
+            hotkeys->pinToolsPressed = true;
+        }
         hotkeys->dispatch(index);
         return noErr;
-    }, 1, &type, this, &platform->handler);
+    }, 2, types, this, &platform->handler);
 #elif defined(Q_OS_WIN)
     qApp->installNativeEventFilter(this);
 #endif
@@ -155,6 +167,14 @@ void Hotkeys::dispatch(int index)
     if (index == 0) emit capture();
     else if (index == 1) emit paste();
     else if (index == 2) emit replay();
+    else if (index == 3) emit pinTools();
+}
+
+void Hotkeys::enablePinTools(bool enabled)
+{
+    if (enabled == registered[3]) return;
+    if (enabled) registerKey(3, QKeySequence(Qt::Key_Space));
+    else unregisterKey(3);
 }
 
 static constexpr qint64 replayTag = 0x53504b4d;
@@ -280,15 +300,19 @@ void Hotkeys::unregisterKeys()
         Platform::mouseOwner = nullptr;
     }
 #endif
-    for (int i = 0; i < 3; ++i) {
-        if (!registered[i]) continue;
+    for (int i = 0; i < 4; ++i) unregisterKey(i);
+}
+
+void Hotkeys::unregisterKey(int index)
+{
+    if (!registered[index]) return;
 #ifdef Q_OS_MACOS
-        UnregisterEventHotKey(platform->keys[i]); platform->keys[i] = nullptr;
+    UnregisterEventHotKey(platform->keys[index]); platform->keys[index] = nullptr;
 #elif defined(Q_OS_WIN)
-        UnregisterHotKey(nullptr, platform->base + i);
+    UnregisterHotKey(nullptr, platform->base + index);
 #endif
-        registered[i] = false;
-    }
+    registered[index] = false;
+    if (index == 3) pinToolsPressed = false;
 }
 
 QString Hotkeys::apply(const Bindings &bindings)
@@ -328,6 +352,7 @@ Hotkeys::~Hotkeys()
 #elif defined(Q_OS_WIN)
     qApp->removeNativeEventFilter(this);
 #endif
+    availableHotkeyBases.append(platform->base);
 }
 
 bool Hotkeys::nativeEventFilter(const QByteArray &, void *message, qintptr *result)
@@ -335,7 +360,7 @@ bool Hotkeys::nativeEventFilter(const QByteArray &, void *message, qintptr *resu
 #ifdef Q_OS_WIN
     auto *msg = static_cast<MSG *>(message);
     const int index = int(msg->wParam) - platform->base;
-    if (msg->message == WM_HOTKEY && index >= 0 && index < 3) {
+    if (msg->message == WM_HOTKEY && index >= 0 && index < 4) {
         dispatch(index);
         *result = 0;
         return true;

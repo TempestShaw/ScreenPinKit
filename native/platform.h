@@ -6,6 +6,11 @@
 #include <QString>
 
 class QScreen;
+#ifdef Q_OS_MACOS
+#include <functional>
+class QWidget;
+std::function<void()> watchPinHover(QWidget *window, std::function<void(bool)> changed);
+#endif
 
 // OS desktop coordinates: points on macOS, physical pixels on Windows.
 struct DesktopWindow {
