@@ -8,6 +8,8 @@
   A mini screenshot annotation and desktop annotation tool based on PyQt5
 </p>
 
+A C++/Qt 6 version for macOS and Windows is available in [native/](native/README.md). Try the [native preview release](https://github.com/TempestShaw/ScreenPinKit/releases/tag/native-v0.1.0-preview.1), read the [quick start](native/GETTING_STARTED.md), or [watch the demo](https://screenpinkit-launch-preview.happysage32.chatgpt.site#sample).
+
 <p align="center">
   <a href="https://discord.gg/VCqKgF7f">
     <img src="https://img.shields.io/badge/Chat-On%20Discord-7289da.svg?sanitize=true" alt="Chat">

@@ -1,0 +1,54 @@
+name: Native C++ build
+on:
+  push:
+    paths: ['native/**', '.github/workflows/native.yml']
+  pull_request:
+    paths: ['native/**', '.github/workflows/native.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          cache: true
+      - name: Configure
+        run: cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build native/build --config Release --parallel
+      - name: Test
+        run: ctest --test-dir native/build -C Release --output-on-failure
+      - name: Package runtime dependencies
+        run: cmake --install native/build --config Release --prefix "${{ github.workspace }}/native/build/package"
+      - name: Build Windows MSIX (unsigned development artifact)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./native/package-windows.ps1 -PackageDirectory native/build/package -Output native/build/ScreenPinKitNative-x64.msix
+      - name: Verify Windows deployed runtime
+        if: runner.os == 'Windows'
+        run: python native/verify-windows-package.py native/build/package
+      - name: Build macOS DMG (ad-hoc development artifact)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python3 -m venv native/build/dmg-tools
+          native/build/dmg-tools/bin/python -m pip install dmgbuild==1.6.7
+          codesign --force --deep --sign - native/build/package/ScreenPinKitNative.app
+          SCREENPIN_DMG_PYTHON="$PWD/native/build/dmg-tools/bin/python" native/package-dmg.sh native/build/package/ScreenPinKitNative.app native/build/ScreenPinKitNative-macOS.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScreenPinKit-native-${{ matrix.os }}
+          path: |
+            native/build/package/
+            native/build/*.msix
+            native/build/*.dmg
