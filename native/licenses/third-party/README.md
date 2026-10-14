@@ -10,7 +10,7 @@ Qt license texts and third-party attributions are included for both Qtbase sourc
 
 ## Rebuild and replace
 
-The application source and build instructions are in https://github.com/TempestShaw/ScreenPinKit/tree/native-v0.1.0-preview.1/native . Qt Core, Gui, Widgets and the platform/image/style plugins are shared libraries. Build a binary-compatible version of the same Qt release with the same architecture, and replace the corresponding DLLs beside the Windows executable or frameworks/plugins in the macOS bundle. Rebuild the application against your modified Qt using CMake's `CMAKE_PREFIX_PATH` when ABI compatibility changes.
+The application source and build instructions are in https://github.com/TempestShaw/ScreenPinKit/tree/native-v0.1.0-preview.2/native . Qt Core, Gui, Widgets and the platform/image/style plugins are shared libraries. Build a binary-compatible version of the same Qt release with the same architecture, and replace the corresponding DLLs beside the Windows executable or frameworks/plugins in the macOS bundle. Rebuild the application against your modified Qt using CMake's `CMAKE_PREFIX_PATH` when ABI compatibility changes.
 
 On macOS, work on a copy of the app, update library install paths if needed, then re-sign the modified bundle and nested code with your own identity or ad-hoc signature. Screen Recording/Accessibility may require a new grant after its signature changes. No original signing key or license key is needed to rebuild or replace these libraries. On Windows, remove development registration before replacing the layout, then register the modified manifest again. The runtime folders contain `qt.conf` for relative plugin paths.
 

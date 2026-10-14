@@ -11,4 +11,11 @@ output=$2
 /usr/bin/codesign --verify --deep --strict "$app"
 "${SCREENPIN_DMG_PYTHON:-python3}" -c 'import dmgbuild, sys; dmgbuild.build_dmg(sys.argv[1], "ScreenPinKit", settings_file=sys.argv[2], defines={"app": sys.argv[3], "background": sys.argv[4], "icon": sys.argv[5]})' \
     "$output" "$script_dir/dmg-settings.py" "$app" "$script_dir/assets/dmg/background@2x.png" "$script_dir/assets/app-icon.icns"
+mount=$(mktemp -d)
+trap 'hdiutil detach "$mount" >/dev/null 2>&1 || true; rmdir "$mount"' EXIT
+hdiutil attach "$output" -readonly -nobrowse -noautoopen -mountpoint "$mount" >/dev/null
+/usr/bin/codesign --verify --deep --strict "$mount/ScreenPinKit.app"
+hdiutil detach "$mount" >/dev/null
+rmdir "$mount"
+trap - EXIT
 hdiutil verify "$output"

@@ -15,4 +15,3 @@ show_sidebar = False
 icon_size = 112
 text_size = 12
 icon_locations = {'ScreenPinKit.app': (160, 235), 'Applications': (500, 235)}
-hide_extensions = ['ScreenPinKit.app']
